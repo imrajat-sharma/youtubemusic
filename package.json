@@ -1,0 +1,27 @@
+{
+  "name": "youtube-music-player",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Responsive YouTube music player built with Next.js, TypeScript, and youtubei.js",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint .",
+    "probe:audio": "node scripts/audio-probe.mjs"
+  },
+  "keywords": [
+    "nextjs",
+    "typescript",
+    "youtube-music",
+    "youtubei.js"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "next": "^16.2.3",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5",
+    "youtubei.js": "^17.0.1"
+  }
+}

@@ -23,5 +23,10 @@
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
     "youtubei.js": "^17.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.7.2",
+    "@types/react": "^19.2.2",
+    "typescript": "^5.9.3"
   }
 }

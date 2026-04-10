@@ -20,8 +20,11 @@
   "license": "ISC",
   "dependencies": {
     "next": "^16.2.3",
+    "plyr": "^3.8.4",
+    "plyr-react": "^6.0.0",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
+    "ts-audio": "^0.8.1",
     "youtubei.js": "^17.0.1"
   },
   "devDependencies": {

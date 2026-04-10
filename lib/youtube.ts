@@ -1,12 +1,3 @@
-import Innertube from 'youtubei.js';
+import { getClient } from '@/lib/backend/utils';
 
-let youtubePromise: Promise<Innertube> | null = null;
-
-export function getYoutubeClient() {
-  if (!youtubePromise) {
-    
-    youtubePromise = Innertube.create();
-  }
-
-  return youtubePromise;
-}
+export const getYoutubeClient = getClient;

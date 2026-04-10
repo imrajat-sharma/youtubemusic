@@ -25,7 +25,8 @@ function formatClock(time: number) {
 }
 
 export default function HomePage() {
-  const audioRef = useRef<HTMLAudioElement>(null);
+  const currentAudioRef = useRef<any>(null);
+  const timeUpdateInterval = useRef<NodeJS.Timeout | null>(null);
   const streamCacheRef = useRef<Map<string, StreamResponse>>(new Map());
   const requestIdRef = useRef(0);
   
@@ -46,9 +47,9 @@ export default function HomePage() {
   const trendingNow = useMemo(() => results.slice(6, 12), [results]);
 
   async function playAudioElement() {
-    if (!audioRef.current) return false;
+    if (!currentAudioRef.current) return false;
     try {
-      await audioRef.current.play();
+      currentAudioRef.current.play();
       setIsPlaying(true);
       return true;
     } catch {
@@ -111,14 +112,42 @@ export default function HomePage() {
 
     try {
       const stream = await fetchStream(track);
-      if (requestId !== requestIdRef.current || !audioRef.current) return;
+      if (requestId !== requestIdRef.current) return;
 
-      audioRef.current.src = stream.audioUrl;
-      audioRef.current.load();
-
-      if (autoplay) {
-        await playAudioElement();
+      if (currentAudioRef.current) {
+        currentAudioRef.current.destroy();
       }
+
+      const { Audio } = await import('ts-audio');
+
+      currentAudioRef.current = Audio({
+        file: stream.audioUrl,
+        autoPlay: autoplay,
+        loop: false,
+      });
+
+      // Bind events
+      currentAudioRef.current.on('end', () => {
+        setIsPlaying(false);
+        skipTrack(1);
+      });
+
+      currentAudioRef.current.on('state', ({ isPlaying }: any) => {
+        setIsPlaying(isPlaying);
+      });
+
+      if (timeUpdateInterval.current) {
+        clearInterval(timeUpdateInterval.current);
+      }
+
+      timeUpdateInterval.current = setInterval(() => {
+        if (currentAudioRef.current) {
+          setCurrentTime(currentAudioRef.current.currentTime);
+        }
+      }, 500);
+
+      setIsPlaying(autoplay);
+
     } catch (err: any) {
       if (requestId !== requestIdRef.current) return;
       setError(err.message || 'Unable to load track.');
@@ -137,23 +166,23 @@ export default function HomePage() {
 
   async function togglePlayback(e?: React.MouseEvent) {
     if (e) e.stopPropagation(); // prevent bubbling if on dock
-    if (!audioRef.current || !selectedTrack) return;
+    if (!currentAudioRef.current && !selectedTrack) return;
 
-    if (audioRef.current.src) {
-      if (audioRef.current.paused) {
+    if (currentAudioRef.current) {
+      if (!isPlaying) {
         await playAudioElement();
       } else {
-        audioRef.current.pause();
+        currentAudioRef.current.pause();
         setIsPlaying(false);
       }
-    } else {
+    } else if (selectedTrack) {
       await startTrack(selectedTrack, true);
     }
   }
 
   function handleSeek(nextValue: number) {
-    if (!audioRef.current?.src) return;
-    audioRef.current.currentTime = nextValue;
+    if (!currentAudioRef.current) return;
+    currentAudioRef.current.seek(nextValue);
     setCurrentTime(nextValue);
   }
 
@@ -173,6 +202,16 @@ export default function HomePage() {
 
   useEffect(() => {
     void runSearch(STARTER_QUERY);
+    
+    return () => {
+      // Cleanup on unmount
+      if (timeUpdateInterval.current) {
+        clearInterval(timeUpdateInterval.current);
+      }
+      if (currentAudioRef.current) {
+        currentAudioRef.current.destroy();
+      }
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -423,23 +462,6 @@ export default function HomePage() {
         </button>
       </nav>
 
-      <audio
-        ref={audioRef}
-        preload="metadata"
-        onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
-        onLoadedMetadata={(e) => setDuration(Number.isFinite(e.currentTarget.duration) ? e.currentTarget.duration : selectedTrack?.durationSeconds ?? 0)}
-        onPlay={() => setIsPlaying(true)}
-        onPause={() => setIsPlaying(false)}
-        onError={() => {
-          setIsPlaying(false);
-          setError('Playback error');
-        }}
-        onEnded={() => {
-          setIsPlaying(false);
-          skipTrack(1);
-        }}
-        style={{ display: 'none' }}
-      />
     </div>
   );
 }

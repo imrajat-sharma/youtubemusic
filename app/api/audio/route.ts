@@ -1,32 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getYoutubeClient } from '@/lib/youtube';
+import { getAudioClient } from '@/lib/youtube';
 
-const AUDIO_FORMATS = [
+export const dynamic = 'force-dynamic';
+export const maxDuration = 30;
+
+const AUDIO_PREFERENCES = [
   {
-    client: 'IOS' as const,
     type: 'audio' as const,
-    quality: 'best',
+    quality: 'best' as const,
     format: 'mp4',
     codec: 'mp4a',
   },
   {
-    client: 'ANDROID' as const,
     type: 'audio' as const,
-    quality: 'best',
-    format: 'mp4',
-    codec: 'mp4a',
-  },
-  {
-    client: 'ANDROID' as const,
-    type: 'audio' as const,
-    quality: 'best',
+    quality: 'best' as const,
     format: 'any',
   },
 ];
 
 export async function GET(request: NextRequest) {
   const id = request.nextUrl.searchParams.get('id')?.trim();
-  const incomingRange = request.headers.get('range') || 'bytes=0-';
+  const incomingRange = request.headers.get('range');
 
   if (!id) {
     return NextResponse.json(
@@ -36,68 +30,144 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const youtube = await getYoutubeClient();
-    let upstreamUrl = '';
-    let lastError: unknown = null;
+    const youtube = await getAudioClient();
 
-    const AUDIO_FORMATS = [
-      { client: 'IOS' as const, type: 'audio' as const, quality: 'best', format: 'mp4', codec: 'mp4a' },
-      { client: 'ANDROID' as const, type: 'audio' as const, quality: 'best', format: 'mp4', codec: 'mp4a' },
-      { client: 'ANDROID' as const, type: 'audio' as const, quality: 'best', format: 'any' },
-    ];
+    const info = await youtube.getBasicInfo(id, { client: 'ANDROID' });
+    let format: any = null;
 
-    for (const options of AUDIO_FORMATS) {
+    for (const preference of AUDIO_PREFERENCES) {
       try {
-        const format = await youtube.getStreamingData(id, options);
-        if (format.url) {
-          upstreamUrl = format.url;
-          break;
-        }
-      } catch (error) {
-        lastError = error;
+        format = info.chooseFormat(preference);
+        if (format) break;
+      } catch {
+        continue;
       }
     }
 
-    if (!upstreamUrl) {
-      console.error("Audio upstream failure. lastError:", lastError);
-      throw (
-        lastError instanceof Error
-          ? lastError
-          : new Error(`Unable to resolve a playable audio stream.`)
-      );
+    if (!format) {
+      throw new Error('Unable to choose a playable audio format.');
     }
 
-    const remoteResponse = await fetch(upstreamUrl, {
-      cache: 'no-store', // Crucial to prevent Next.js from caching a 403
-      headers: {
-        'Accept': '*/*',
-        'Range': incomingRange,
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-      },
-    });
+    const mimeType = format.mime_type?.split(';')[0] || 'audio/mp4';
+    const totalLength = format.content_length ? Number(format.content_length) : undefined;
 
-    if (!remoteResponse.ok || !remoteResponse.body) {
-      throw new Error(`Upstream audio request failed with status ${remoteResponse.status}.`);
+    // Parse range header
+    let rangeStart: number | undefined;
+    let rangeEnd: number | undefined;
+
+    if (incomingRange?.startsWith('bytes=')) {
+      const [startText, endText] = incomingRange.replace('bytes=', '').split('-');
+      rangeStart = Number.parseInt(startText, 10);
+      if (Number.isNaN(rangeStart)) rangeStart = undefined;
+      rangeEnd = endText ? Number.parseInt(endText, 10) : undefined;
+      if (rangeEnd !== undefined && Number.isNaN(rangeEnd)) rangeEnd = undefined;
     }
 
-    const headers = new Headers();
-    headers.set('Content-Type', remoteResponse.headers.get('content-type') || 'audio/mp4');
-    headers.set('Cache-Control', 'public, max-age=1200');
+    // Try multiple download strategies
+    const clients = ['ANDROID' as const, 'IOS' as const];
+    let lastError: unknown = null;
 
-    const contentLength = remoteResponse.headers.get('content-length');
-    const acceptRanges = remoteResponse.headers.get('accept-ranges');
-    const contentRange = remoteResponse.headers.get('content-range');
+    for (const client of clients) {
+      for (const preference of AUDIO_PREFERENCES) {
+        try {
+          const downloadParams: any = {
+            client,
+            ...preference,
+          };
 
-    if (contentLength) headers.set('Content-Length', contentLength);
-    if (acceptRanges) headers.set('Accept-Ranges', acceptRanges);
-    if (contentRange) headers.set('Content-Range', contentRange);
+          if (rangeStart !== undefined) {
+            downloadParams.range = {
+              start: rangeStart,
+              end: rangeEnd ?? (totalLength ? totalLength - 1 : rangeStart + 1024 * 1024 - 1),
+            };
+          }
 
-    return new NextResponse(remoteResponse.body, {
-      status: remoteResponse.status,
-      headers,
-    });
+          const body = await youtube.download(id, downloadParams);
+
+          const headers = new Headers();
+          headers.set('Content-Type', mimeType);
+          headers.set('Cache-Control', 'public, max-age=600');
+          headers.set('Accept-Ranges', 'bytes');
+
+          if (totalLength && rangeStart !== undefined) {
+            const end = Math.min(
+              rangeEnd ?? totalLength - 1,
+              totalLength - 1,
+            );
+            const length = end - rangeStart + 1;
+            headers.set('Content-Length', String(length));
+            headers.set('Content-Range', `bytes ${rangeStart}-${end}/${totalLength}`);
+            return new NextResponse(body, { status: 206, headers });
+          }
+
+          if (totalLength) {
+            headers.set('Content-Length', String(totalLength));
+          }
+
+          return new NextResponse(body, { status: 200, headers });
+        } catch (err) {
+          lastError = err;
+          continue;
+        }
+      }
+    }
+
+    // Fallback: Try streaming URL directly with proper headers
+    const streamingData = info.streaming_data;
+    const adaptiveFormats = streamingData?.adaptive_formats || [];
+    const audioFormats = adaptiveFormats
+      .filter((f: any) => f.mime_type?.startsWith('audio/'))
+      .sort((a: any, b: any) => (b.bitrate || 0) - (a.bitrate || 0));
+
+    for (const fmt of audioFormats) {
+      const url = fmt.url;
+      if (!url) continue;
+
+      try {
+        const remoteResponse = await fetch(url, {
+          cache: 'no-store',
+          redirect: 'follow',
+          headers: {
+            Accept: '*/*',
+            ...(incomingRange ? { Range: incomingRange } : {}),
+            'User-Agent': 'com.google.android.youtube/19.29.37 (Linux; U; Android 14) gzip',
+          },
+        });
+
+        if (!remoteResponse.ok || !remoteResponse.body) continue;
+
+        const headers = new Headers();
+        headers.set(
+          'Content-Type',
+          remoteResponse.headers.get('content-type') || mimeType,
+        );
+        headers.set('Cache-Control', 'public, max-age=600');
+
+        const cl = remoteResponse.headers.get('content-length');
+        const ar = remoteResponse.headers.get('accept-ranges');
+        const cr = remoteResponse.headers.get('content-range');
+        if (cl) headers.set('Content-Length', cl);
+        if (ar) headers.set('Accept-Ranges', ar);
+        if (cr) headers.set('Content-Range', cr);
+
+        return new NextResponse(remoteResponse.body, {
+          status: remoteResponse.status,
+          headers,
+        });
+      } catch {
+        continue;
+      }
+    }
+
+    throw lastError instanceof Error
+      ? lastError
+      : new Error('Unable to resolve a playable audio stream.');
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unable to stream audio.';
-    return NextResponse.json({ error: message, details: String(error) }, { status: 500 });
+    console.error('[audio route]', id, message);
+    return NextResponse.json(
+      { error: message, details: String(error) },
+      { status: 500 },
+    );
   }
 }

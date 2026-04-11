@@ -1,29 +1,42 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 
 :root {
   --bg-base: #030303;
   --bg-surface: rgba(255, 255, 255, 0.05);
   --bg-surface-hover: rgba(255, 255, 255, 0.1);
   --bg-glass: rgba(15, 15, 15, 0.75);
+  --bg-glass-heavy: rgba(10, 10, 10, 0.92);
   
   --text-primary: #ffffff;
   --text-secondary: #a0a0a0;
   --text-muted: #6b6b6b;
   
-  --accent: #ff2d55; /* Apple Music style pink/red, feel free to change to Spotify green #1db954 */
+  --accent: #ff2d55;
   --accent-glow: rgba(255, 45, 85, 0.4);
+  --accent-soft: rgba(255, 45, 85, 0.15);
+  --accent-hover: #ff4f72;
+  
+  --success: #30d158;
+  --warning: #ffd60a;
+  --error: #ff453a;
   
   --border: rgba(255, 255, 255, 0.08);
+  --border-light: rgba(255, 255, 255, 0.12);
   
   --border-radius-sm: 8px;
   --border-radius-md: 12px;
   --border-radius-lg: 20px;
   --border-radius-full: 9999px;
   
-  --nav-height: 72px; /* Mobile bottom nav height */
-  --player-dock-height: 64px; /* Mobile player dock height */
+  --nav-height: 72px;
+  --player-dock-height: 64px;
   --desktop-sidebar-width: 260px;
   --desktop-player-height: 90px;
+  
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.5);
+  --shadow-glow: 0 0 40px var(--accent-glow);
 }
 
 * {
@@ -43,7 +56,12 @@ body {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  overflow: hidden; /* App Shell keeps everything enclosed */
+  overflow: hidden;
+}
+
+::selection {
+  background: var(--accent-soft);
+  color: var(--text-primary);
 }
 
 a {
@@ -65,7 +83,7 @@ input {
   outline: none;
 }
 
-/* Custom Scrollbar for desktop */
+/* Custom Scrollbar */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
@@ -79,4 +97,62 @@ input {
 }
 ::-webkit-scrollbar-thumb:hover {
   background: var(--text-muted);
+}
+
+/* ---- Keyframe Animations ---- */
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(100%); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes eqBar1 {
+  0%, 100% { height: 4px; }
+  25% { height: 16px; }
+  50% { height: 8px; }
+  75% { height: 20px; }
+}
+
+@keyframes eqBar2 {
+  0%, 100% { height: 8px; }
+  30% { height: 20px; }
+  60% { height: 4px; }
+  80% { height: 14px; }
+}
+
+@keyframes eqBar3 {
+  0%, 100% { height: 12px; }
+  20% { height: 4px; }
+  45% { height: 18px; }
+  70% { height: 6px; }
+}
+
+@keyframes toastIn {
+  from { opacity: 0; transform: translateY(20px) scale(0.95); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
 }

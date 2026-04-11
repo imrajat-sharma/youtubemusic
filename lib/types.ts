@@ -17,6 +17,8 @@ export type StreamResponse = {
   id: string;
   audioUrl: string;
   expiresAt: number;
+  mimeType?: string;
+  isFallback?: boolean;
 };
 
 export type YTItemType = 'song' | 'video';
